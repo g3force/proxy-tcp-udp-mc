@@ -23,7 +23,7 @@ go get github.com/g3force/proxy-tcp-udp-mc/...
 You can use pre-build docker images:
 ```shell script
 docker pull g3force/proxy-tcp-udp-mc
-docker run -p 8082:8082 g3force/proxy-tcp-udp-mc
+docker run g3force/proxy-tcp-udp-mc [options]
 ```
 
 You can get the available arguments with `-h` option:
