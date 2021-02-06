@@ -1,6 +1,5 @@
-[![CircleCI](https://circleci.com/gh/g3force/proxy-tcp-udp-mc/tree/master.svg?style=svg)](https://circleci.com/gh/g3force/proxy-tcp-udp-mc/tree/master)
+[![CircleCI](https://circleci.com/gh/g3force/proxy-tcp-udp-mc/tree/main.svg?style=svg)](https://circleci.com/gh/g3force/proxy-tcp-udp-mc/tree/main)
 [![Go Report Card](https://goreportcard.com/badge/github.com/g3force/proxy-tcp-udp-mc?style=flat-square)](https://goreportcard.com/report/github.com/g3force/proxy-tcp-udp-mc)
-[![Go Doc](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://godoc.org/github.com/g3force/proxy-tcp-udp-mc/pkg/proxy)
 [![Release](https://img.shields.io/github/release/g3force/proxy-tcp-udp-mc.svg?style=flat-square)](https://github.com/g3force/proxy-tcp-udp-mc/releases/latest)
 
 # proxy-tcp-udp-mc
