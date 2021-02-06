@@ -52,10 +52,10 @@ func TestTcpProxy_multi_client(t *testing.T) {
 	nClients := 5
 
 	t.Run("Roundtrip", func(t *testing.T) {
-		proxy := NewTcpProxy(":16000", "localhost:16001")
+		proxy := NewTcpProxy(":16100", "localhost:16101")
 		proxy.Start()
 
-		server := NewTcpServer(":16001")
+		server := NewTcpServer(":16101")
 		server.Consumer = func(data []byte, addr net.Addr) {
 			// Echo data
 			server.Respond(data, addr)
@@ -65,7 +65,7 @@ func TestTcpProxy_multi_client(t *testing.T) {
 		cRecv := make(chan bool, nClients)
 		var clients []*TcpClient
 		for i := 0; i < nClients; i++ {
-			client := NewTcpClient("localhost:16000")
+			client := NewTcpClient("localhost:16100")
 			clientId := i
 			client.Consumer = func(data []byte) {
 				actualRes := string(data)

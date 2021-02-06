@@ -52,10 +52,10 @@ func TestUdpProxy_multi_client(t *testing.T) {
 	nClients := 5
 
 	t.Run("Roundtrip", func(t *testing.T) {
-		proxy := NewUdpProxy(":15000", "localhost:15001")
+		proxy := NewUdpProxy(":15100", "localhost:15101")
 		proxy.Start()
 
-		server := NewUdpServer(":15001")
+		server := NewUdpServer(":15101")
 		server.Consumer = func(data []byte, addr *net.UDPAddr) {
 			// Echo data
 			server.Respond(data, addr)
@@ -65,7 +65,7 @@ func TestUdpProxy_multi_client(t *testing.T) {
 		cRecv := make(chan bool, nClients)
 		var clients []*UdpClient
 		for i := 0; i < nClients; i++ {
-			client := NewUdpClient("localhost:15000")
+			client := NewUdpClient("localhost:15100")
 			clientId := i
 			client.Consumer = func(data []byte) {
 				actualRes := string(data)
