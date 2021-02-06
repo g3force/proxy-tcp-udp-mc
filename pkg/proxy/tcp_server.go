@@ -25,6 +25,19 @@ func NewTcpServer(address string) (t *TcpServer) {
 
 func (s *TcpServer) Start() {
 	s.running = true
+
+	addr, err := net.ResolveTCPAddr("tcp", s.address)
+	if err != nil {
+		log.Printf("Could resolve address %v: %v", s.address, err)
+		return
+	}
+
+	s.listener, err = net.ListenTCP("tcp", addr)
+	if err != nil {
+		log.Printf("Could not listen at %v: %v", s.address, err)
+		return
+	}
+
 	go s.accept()
 }
 
@@ -44,18 +57,6 @@ func (s *TcpServer) isRunning() bool {
 }
 
 func (s *TcpServer) accept() {
-	addr, err := net.ResolveTCPAddr("tcp", s.address)
-	if err != nil {
-		log.Printf("Could resolve address %v: %v", s.address, err)
-		return
-	}
-
-	s.listener, err = net.ListenTCP("tcp", addr)
-	if err != nil {
-		log.Printf("Could not listen at %v: %v", s.address, err)
-		return
-	}
-
 	log.Printf("Listening on %s", s.address)
 
 	for {
