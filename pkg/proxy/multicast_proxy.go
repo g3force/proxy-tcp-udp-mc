@@ -18,6 +18,10 @@ func NewMulticastProxy(sourceAddress, targetAddress string) (p *MulticastProxy) 
 	return
 }
 
+func (p *MulticastProxy) SetVerbose(verbose bool) {
+	p.source.Verbose = verbose
+}
+
 func (p *MulticastProxy) newDataFromSource(data []byte) {
 	p.target.Send(data)
 }

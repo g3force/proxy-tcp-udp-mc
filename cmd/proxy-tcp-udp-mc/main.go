@@ -13,6 +13,7 @@ import (
 
 func main() {
 	flag.Usage = Usage
+	verbose := flag.Bool("verbose", false, "More verbose output (only for multicast atm.)")
 	flag.Parse()
 
 	var proxies []proxy.Stoppable
@@ -35,6 +36,7 @@ func main() {
 			proxies = append(proxies, udpProxy)
 		case "mc":
 			multicastProxy := proxy.NewMulticastProxy(parts[1], parts[2])
+			multicastProxy.SetVerbose(*verbose)
 			if len(parts) > 3 {
 				multicastProxy.SkipInterfaces(parseSkipInterfaces(parts[3]))
 			}
@@ -55,6 +57,7 @@ func Usage() {
 	fmt.Fprintf(flag.CommandLine.Output(), "Proxy either udp, tcp or multicast (mc)\n")
 	fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] [[tcp|udp|mc];sourceAddress;targetAddress]...\n", os.Args[0])
 	fmt.Fprintf(flag.CommandLine.Output(), "Example: %s udp;:10000;localhost:10001 mc;224.0.0.1:10000;224.0.0.2:10000\n", os.Args[0])
+	fmt.Fprintf(flag.CommandLine.Output(), "\n")
 	flag.PrintDefaults()
 }
 
