@@ -44,8 +44,6 @@ workflows:
   main:
     jobs:
     - app:
-        requires:
-        - frontend
         filters:
           tags:
             only: /.*/
