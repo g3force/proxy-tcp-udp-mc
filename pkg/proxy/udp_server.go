@@ -23,6 +23,23 @@ func NewUdpServer(address string) (t *UdpServer) {
 
 func (s *UdpServer) Start() {
 	s.running = true
+
+	addr, err := net.ResolveUDPAddr("udp", s.address)
+	if err != nil {
+		log.Printf("Could resolve address %v: %v", s.address, err)
+		return
+	}
+
+	s.conn, err = net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Printf("Could not listen at %v: %v", s.address, err)
+		return
+	}
+
+	if err := s.conn.SetReadBuffer(maxDatagramSize); err != nil {
+		log.Println("Could not set read buffer: ", err)
+	}
+
 	go s.receive()
 }
 
@@ -42,22 +59,6 @@ func (s *UdpServer) isRunning() bool {
 }
 
 func (s *UdpServer) receive() {
-	addr, err := net.ResolveUDPAddr("udp", s.address)
-	if err != nil {
-		log.Printf("Could resolve address %v: %v", s.address, err)
-		return
-	}
-
-	s.conn, err = net.ListenUDP("udp", addr)
-	if err != nil {
-		log.Printf("Could not listen at %v: %v", s.address, err)
-		return
-	}
-
-	if err := s.conn.SetReadBuffer(maxDatagramSize); err != nil {
-		log.Println("Could not set read buffer: ", err)
-	}
-
 	log.Printf("Listening on %s", s.address)
 
 	data := make([]byte, maxDatagramSize)
