@@ -1,11 +1,12 @@
 package proxy
 
 type MulticastProxy struct {
+	name          string
 	sourceAddress string
 	targetAddress string
 	source        *MulticastServer
 	target        *UdpClient
-	Stoppable
+	Proxy
 }
 
 func NewMulticastProxy(sourceAddress, targetAddress string) (p *MulticastProxy) {
@@ -16,6 +17,11 @@ func NewMulticastProxy(sourceAddress, targetAddress string) (p *MulticastProxy) 
 	p.target = NewUdpClient(p.targetAddress)
 	p.target.Consumer = p.newDataFromTarget
 	return
+}
+
+func (p *MulticastProxy) SetName(name string) {
+	p.source.name = name + "_Source"
+	p.target.Name = name + "_Target"
 }
 
 func (p *MulticastProxy) SetVerbose(verbose bool) {

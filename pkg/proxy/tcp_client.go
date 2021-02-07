@@ -7,31 +7,70 @@ import (
 )
 
 type TcpClient struct {
-	address  string
-	Consumer func([]byte)
-	conn     *net.TCPConn
-	running  bool
-	mutex    sync.Mutex
+	Name           string
+	CbData         func([]byte)
+	CbConnected    func()
+	CbDisconnected func()
+	Verbose        bool
+	address        string
+	conn           *net.TCPConn
+	running        bool
+	mutex          sync.Mutex
 }
 
-func NewTcpClient(address string) (t *TcpClient) {
-	t = new(TcpClient)
-	t.address = address
-	t.Consumer = func([]byte) {}
+func NewTcpClient(address string) (c *TcpClient) {
+	c = new(TcpClient)
+	c.Name = "TcpClient"
+	c.CbData = func([]byte) {}
+	c.CbConnected = func() {}
+	c.CbDisconnected = func() {}
+	c.address = address
 	return
 }
 
 func (c *TcpClient) Start() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if c.running {
+		return
+	}
 	c.running = true
-	c.connect()
+
+	addr, err := net.ResolveTCPAddr("tcp", c.address)
+	if err != nil {
+		log.Printf("%v - Could resolve address %v: %v", c.Name, c.address, err)
+		return
+	}
+
+	c.conn, err = net.DialTCP("tcp", nil, addr)
+	if err != nil {
+		log.Printf("%v - Could not connect to %v: %v", c.Name, c.address, err)
+		return
+	}
+
+	if err := c.conn.SetReadBuffer(maxDatagramSize); err != nil {
+		log.Printf("%v - Could not set read buffer: %v", c.Name, err)
+	}
+
+	c.CbConnected()
+	if c.Verbose {
+		log.Printf("%v - Start Receiving: %v -> %v", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr())
+	}
+	go c.receive()
 }
 
 func (c *TcpClient) Stop() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+
+	if !c.running {
+		return
+	}
 	c.running = false
+
 	if err := c.conn.Close(); err != nil {
-		log.Println("Could not close client connection: ", err)
+		log.Printf("%v - Could not close client connection: %v", c.Name, err)
 	}
 }
 
@@ -41,46 +80,32 @@ func (c *TcpClient) isRunning() bool {
 	return c.running
 }
 
-func (c *TcpClient) connect() {
-	addr, err := net.ResolveTCPAddr("tcp", c.address)
-	if err != nil {
-		log.Printf("Could resolve address %v: %v", c.address, err)
-		return
-	}
-
-	c.conn, err = net.DialTCP("tcp", nil, addr)
-	if err != nil {
-		log.Printf("Could not connect to %v: %v", c.address, err)
-		return
-	}
-
-	if err := c.conn.SetReadBuffer(maxDatagramSize); err != nil {
-		log.Println("Could not set read buffer: ", err)
-	}
-
-	go c.receive()
-}
-
 func (c *TcpClient) receive() {
-	log.Printf("Connected to %s", c.address)
-
+	firstData := true
 	data := make([]byte, maxDatagramSize)
-	for {
+	for c.isRunning() {
 		n, err := c.conn.Read(data)
 		if err != nil {
-			log.Printf("Could not receive data from %s: %s", c.address, err)
+			log.Printf("%v - Could not receive data: %v -> %v: %s", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr(), err)
 			break
 		}
-		c.Consumer(data[:n])
+		if c.Verbose && firstData {
+			firstData = false
+			log.Printf("%v - Received data: %v -> %v", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr())
+		}
+		c.CbData(data[:n])
 	}
 
-	log.Printf("Disconnected from %s", c.address)
+	c.CbDisconnected()
+	if c.Verbose {
+		log.Printf("%v - Stop receiving: %v -> %v", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr())
+	}
 }
 
 func (c *TcpClient) Send(data []byte) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	if _, err := c.conn.Write(data); err != nil {
-		log.Printf("Could not write to %s: %s", c.address, err)
+		log.Printf("%v - Could not send: %v -> %v: %s", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr(), err)
 	}
 }

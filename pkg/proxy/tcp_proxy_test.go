@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"log"
 	"net"
 	"strconv"
 	"testing"
@@ -9,39 +10,64 @@ import (
 
 func TestTcpProxy_roundtrip(t *testing.T) {
 
-	req := "Request"
-	res := "Response"
+	req := "R"
+	timesSend := 5
 
 	t.Run("Roundtrip", func(t *testing.T) {
 		proxy := NewTcpProxy(":16000", "localhost:16001")
 		proxy.Start()
 
 		server := NewTcpServer(":16001")
-		server.Consumer = func(data []byte, addr net.Addr) {
-			server.Respond([]byte(res), addr)
+		server.Name = "TcpTargetServer"
+		server.CbData = func(data []byte, addr net.Addr) {
+			log.Printf("Target: Got '%s'", string(data))
+			server.Respond(data, addr)
+			log.Printf("Target: Responded '%s'", string(data))
 		}
 		server.Start()
 
-		cRecv := make(chan bool)
+		cRecv := make(chan bool, timesSend)
 		client := NewTcpClient("localhost:16000")
-		client.Consumer = func(data []byte) {
+		client.Name = "TcpSourceClient"
+		client.CbData = func(data []byte) {
+			log.Printf("Source: Got '%s'", string(data))
 			actualRes := string(data)
-			if actualRes != res {
-				t.Errorf("Expected to receive %s, but got %s", res, actualRes)
+			for i := 0; i < len(actualRes); i++ {
+				cRecv <- true
 			}
-			cRecv <- true
+			log.Printf("Source: Consumed data")
 		}
 		client.Start()
 
-		client.Send([]byte(req))
+		for i := 0; i < timesSend; i++ {
+			log.Printf("Source: Send '%s'", req)
+			client.Send([]byte(req))
+		}
 
-		select {
-		case <-cRecv:
-		case <-time.After(1 * time.Second):
-			t.Error("Timed out")
+		for i := 0; i < timesSend; i++ {
+			select {
+			case <-cRecv:
+			case <-time.After(1 * time.Second):
+				t.Error("Timed out")
+			}
 		}
 
 		client.Stop()
+
+		for i := 0; i < 5; i++ {
+			if len(server.connections) == 0 &&
+				len(proxy.server.connections) == 0 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if len(server.connections) > 0 {
+			t.Errorf("There are still %v active connections on the target server", len(server.connections))
+		}
+		if len(proxy.server.connections) > 0 {
+			t.Errorf("There are still %v active connections on the proxy server", len(proxy.server.connections))
+		}
+
 		server.Stop()
 		proxy.Stop()
 	})
@@ -56,7 +82,8 @@ func TestTcpProxy_multi_client(t *testing.T) {
 		proxy.Start()
 
 		server := NewTcpServer(":16101")
-		server.Consumer = func(data []byte, addr net.Addr) {
+		server.Name = "TcpTargetServer"
+		server.CbData = func(data []byte, addr net.Addr) {
 			// Echo data
 			server.Respond(data, addr)
 		}
@@ -67,7 +94,8 @@ func TestTcpProxy_multi_client(t *testing.T) {
 		for i := 0; i < nClients; i++ {
 			client := NewTcpClient("localhost:16100")
 			clientId := i
-			client.Consumer = func(data []byte) {
+			client.Name = "TcpSourceClient_" + strconv.Itoa(clientId)
+			client.CbData = func(data []byte) {
 				actualRes := string(data)
 				expectedRes := strconv.Itoa(clientId)
 				if actualRes != expectedRes {
@@ -94,6 +122,20 @@ func TestTcpProxy_multi_client(t *testing.T) {
 
 		for _, client := range clients {
 			client.Stop()
+		}
+
+		for i := 0; i < 5; i++ {
+			if len(server.connections) == 0 &&
+				len(proxy.server.connections) == 0 {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if len(server.connections) > 0 {
+			t.Errorf("There are still %v active connections on the target server", len(server.connections))
+		}
+		if len(proxy.server.connections) > 0 {
+			t.Errorf("There are still %v active connections on the proxy server", len(proxy.server.connections))
 		}
 
 		server.Stop()
