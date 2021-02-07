@@ -30,8 +30,11 @@ You can get the available arguments with `-h` option:
 ```
 > proxy-tcp-udp-mc -h
 Proxy either udp, tcp or multicast (mc)
-Usage: proxy-tcp-udp-mc [options] [[tcp|udp|mc];sourceAddress;targetAddress]...
-Example: proxy-tcp-udp-mc udp;:10000;localhost:10001 mc;224.0.0.1:10000;224.0.0.2:10000
+Usage: proxy-tcp-udp-mc [options] [[tcp|udp|mc],sourceAddress,targetAddress[,name]]...
+Example: proxy-tcp-udp-mc udp,:10000,localhost:10001,foo mc,224.0.0.1:10000,224.0.0.2:10000,bar
+
+  -verbose
+        More verbose output
 ```
 
 ## Library Usage
