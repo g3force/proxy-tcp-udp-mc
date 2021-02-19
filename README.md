@@ -3,12 +3,14 @@
 [![Release](https://img.shields.io/github/release/g3force/proxy-tcp-udp-mc.svg?style=flat-square)](https://github.com/g3force/proxy-tcp-udp-mc/releases/latest)
 
 # proxy-tcp-udp-mc
-A simple proxy for TCP, UDP and Multicast connections
+A simple proxy for TCP, UDP and Multicast connections.
 
-It provides proxies for TCP, UDP and Multicast connections.
+It can be used as a Go library, binary or docker container.
 The multicast proxy is searching on all available interfaces for messages, but does not connect to all interfaces
 at the same time. It broadcast the received messages to the target group.
 It does not exclude the source net, so proxying two equal multicast addresses should be avoided.
+
+The original use case of this proxy was to separate different services within a docker-compose project using multiple networks and connecting specific ports with this proxy.
 
 ## Usage
 
