@@ -1,5 +1,7 @@
 package proxy
 
+import "net"
+
 type MulticastProxy struct {
 	name          string
 	sourceAddress string
@@ -13,7 +15,8 @@ func NewMulticastProxy(sourceAddress, targetAddress string) (p *MulticastProxy) 
 	p = new(MulticastProxy)
 	p.sourceAddress = sourceAddress
 	p.targetAddress = targetAddress
-	p.source = NewMulticastServer(p.newDataFromSource)
+	p.source = NewMulticastServer(sourceAddress)
+	p.source.Consumer = p.newDataFromSource
 	p.target = NewUdpClient(p.targetAddress)
 	p.target.Consumer = p.newDataFromTarget
 	return
@@ -28,7 +31,7 @@ func (p *MulticastProxy) SetVerbose(verbose bool) {
 	p.source.Verbose = verbose
 }
 
-func (p *MulticastProxy) newDataFromSource(data []byte) {
+func (p *MulticastProxy) newDataFromSource(data []byte, _ net.Interface) {
 	p.target.Send(data)
 }
 func (p *MulticastProxy) newDataFromTarget(_ []byte) {
@@ -37,7 +40,7 @@ func (p *MulticastProxy) newDataFromTarget(_ []byte) {
 
 func (p *MulticastProxy) Start() {
 	p.target.Start()
-	p.source.Start(p.sourceAddress)
+	p.source.Start()
 }
 
 func (p *MulticastProxy) Stop() {

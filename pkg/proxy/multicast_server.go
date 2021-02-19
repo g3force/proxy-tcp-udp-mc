@@ -8,43 +8,61 @@ import (
 )
 
 type MulticastServer struct {
-	name           string
-	Verbose        bool
-	connection     *net.UDPConn
-	running        bool
-	consumer       func([]byte)
-	mutex          sync.Mutex
-	SkipInterfaces []string
+	name             string
+	multicastAddress string
+	Verbose          bool
+	connection       *net.UDPConn
+	running          bool
+	Consumer         func([]byte, net.Interface)
+	mutex            sync.Mutex
+	SkipInterfaces   []string
+	receivers        sync.WaitGroup
 }
 
-func NewMulticastServer(consumer func([]byte)) (r *MulticastServer) {
+func NewMulticastServer(multicastAddress string) (r *MulticastServer) {
 	r = new(MulticastServer)
 	r.name = "MulticastServer"
-	r.consumer = consumer
+	r.multicastAddress = multicastAddress
+	r.Consumer = func([]byte, net.Interface) {}
 	return
 }
 
-func (r *MulticastServer) Start(multicastAddress string) {
+func (r *MulticastServer) Start() {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	if r.running {
+		return
+	}
 	r.running = true
-	go r.receive(multicastAddress)
+
+	log.Printf("%v - Starting", r.name)
+	go r.receive()
+	log.Printf("%v - Started", r.name)
 }
 
 func (r *MulticastServer) Stop() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+	if !r.running {
+		return
+	}
+	log.Printf("%v - Stopping", r.name)
 	r.running = false
 	if err := r.connection.Close(); err != nil {
 		log.Printf("%v - Could not close connection: %v", r.name, err)
 	}
+	r.receivers.Wait()
+	r.connection = nil
+	log.Printf("%v - Stopped", r.name)
 }
 
-func (r *MulticastServer) receive(multicastAddress string) {
+func (r *MulticastServer) receive() {
 	var currentIfiIdx = 0
 	for r.isRunning() {
 		ifis := r.interfaces()
 		currentIfiIdx = currentIfiIdx % len(ifis)
 		ifi := ifis[currentIfiIdx]
-		r.receiveOnInterface(multicastAddress, ifi)
+		r.receiveOnInterface(ifi)
 		currentIfiIdx++
 		if currentIfiIdx >= len(ifis) {
 			// cycled though all interfaces once, make a short break to avoid producing endless log messages
@@ -64,6 +82,7 @@ func (r *MulticastServer) interfaces() (interfaces []net.Interface) {
 	ifis, err := net.Interfaces()
 	if err != nil {
 		log.Printf("%v - Could not get available interfaces: %v", r.name, err)
+		return
 	}
 	for _, ifi := range ifis {
 		if ifi.Flags&net.FlagMulticast == 0 || // No multicast support
@@ -84,54 +103,61 @@ func (r *MulticastServer) skipInterface(ifiName string) bool {
 	return false
 }
 
-func (r *MulticastServer) receiveOnInterface(multicastAddress string, ifi net.Interface) {
-	addr, err := net.ResolveUDPAddr("udp", multicastAddress)
+func (r *MulticastServer) receiveOnInterface(ifi net.Interface) {
+	addr, err := net.ResolveUDPAddr("udp", r.multicastAddress)
 	if err != nil {
-		log.Printf("%v - Could resolve multicast address %v: %v", r.name, multicastAddress, err)
+		log.Printf("%v - Could not resolve multicast address %v: %v", r.name, r.multicastAddress, err)
 		return
 	}
 
-	r.connection, err = net.ListenMulticastUDP("udp", &ifi, addr)
+	conn, err := net.ListenMulticastUDP("udp", &ifi, addr)
 	if err != nil {
-		log.Printf("%v - Could not listen at %v: %v", r.name, multicastAddress, err)
+		log.Printf("%v - Could not listen at %v: %v", r.name, r.multicastAddress, err)
 		return
 	}
+	r.connection = conn
+	r.receivers.Add(1)
+	defer r.receivers.Done()
 
-	if err := r.connection.SetReadBuffer(maxDatagramSize); err != nil {
+	if err := conn.SetReadBuffer(maxDatagramSize); err != nil {
 		log.Printf("%v - Could not set read buffer: %v", r.name, err)
 	}
 
 	if r.Verbose {
-		log.Printf("%v - Listening on %s (%s)", r.name, multicastAddress, ifi.Name)
+		log.Printf("%v - Listening on %s (%s)", r.name, r.multicastAddress, ifi.Name)
 	}
 
 	first := true
 	data := make([]byte, maxDatagramSize)
 	for {
-		if err := r.connection.SetDeadline(time.Now().Add(300 * time.Millisecond)); err != nil {
-			log.Printf("%v - Could not set deadline on connection: %v", r.name, err)
+		if err := conn.SetDeadline(time.Now().Add(300 * time.Millisecond)); err != nil {
+			if opErr, ok := err.(*net.OpError); !ok || opErr.Err.Error() != "use of closed network connection" {
+				log.Printf("%v - Could not set deadline on connection: %v", r.name, err)
+			}
+			break
 		}
-		n, _, err := r.connection.ReadFromUDP(data)
+		n, _, err := conn.ReadFromUDP(data)
 		if err != nil {
-			if r.Verbose {
-				log.Printf("%v - ReadFromUDP failed: %v", r.name, err)
+			if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+				if err := r.connection.Close(); err != nil {
+					log.Printf("%v - Could not close listener: %v", r.name, err)
+				}
+				return
+			}
+			if opErr, ok := err.(*net.OpError); !ok || opErr.Err.Error() != "use of closed network connection" {
+				log.Printf("%v - Could not receive data from %s at %s: %s", r.name, conn.RemoteAddr(), conn.LocalAddr(), err)
 			}
 			break
 		}
 
-		if r.Verbose && first {
-			log.Printf("%v - Got first data packets from %s (%s)", r.name, multicastAddress, ifi.Name)
+		if first {
+			log.Printf("%v - Got first data packets from %s (%s)", r.name, r.multicastAddress, ifi.Name)
 			first = false
 		}
-
-		r.consumer(data[:n])
+		r.Consumer(data[:n], ifi)
 	}
 
 	if r.Verbose {
-		log.Printf("%v - Stop listening on %s (%s)", r.name, multicastAddress, ifi.Name)
-	}
-
-	if err := r.connection.Close(); err != nil {
-		log.Printf("%v - Could not close listener: %v", r.name, err)
+		log.Printf("%v - Stop listening on %s (%s)", r.name, r.multicastAddress, ifi.Name)
 	}
 }
