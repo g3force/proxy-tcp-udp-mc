@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"log"
 	"net"
 	"strconv"
 	"testing"
@@ -63,6 +64,7 @@ func TestUdpProxy_multi_client(t *testing.T) {
 		server.Consumer = func(data []byte, addr *net.UDPAddr) {
 			// Echo data
 			server.Respond(data, addr)
+			log.Printf("Test-Server: Got %v from %v", string(data), addr)
 		}
 		server.Name = "UdpTestServer"
 		server.Start()
@@ -78,6 +80,7 @@ func TestUdpProxy_multi_client(t *testing.T) {
 				if actualRes != expectedRes {
 					t.Errorf("Expected to receive %s, but got %s", expectedRes, actualRes)
 				}
+				log.Printf("Test-Client (%v): Got %v", clientId, string(data))
 				cRecv <- true
 			}
 			client.Name = "UdpTestClient_" + strconv.Itoa(i)
