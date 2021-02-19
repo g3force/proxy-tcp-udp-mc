@@ -86,7 +86,6 @@ func (p *TcpProxy) SetName(name string) {
 // SetName sets the name of the proxy for identification in logs
 func (p *TcpProxy) SetVerbose(verbose bool) {
 	p.verbose = verbose
-	p.server.Verbose = verbose
 	for _, client := range p.clients {
 		client.client.Verbose = verbose
 	}

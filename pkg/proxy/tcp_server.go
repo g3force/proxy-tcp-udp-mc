@@ -11,12 +11,12 @@ type TcpServer struct {
 	CbData         func(data []byte, addr net.Addr)
 	CbConnected    func(addr net.Addr)
 	CbDisconnected func(addr net.Addr)
-	Verbose        bool
 	address        string
 	listener       *net.TCPListener
 	connections    map[string]*net.TCPConn
 	running        bool
 	mutex          sync.Mutex
+	receivers      sync.WaitGroup
 }
 
 func NewTcpServer(address string) (t *TcpServer) {
@@ -66,6 +66,10 @@ func (s *TcpServer) Stop() {
 	if err := s.listener.Close(); err != nil {
 		log.Printf("%v - Could not close client connection: %v", s.Name, err)
 	}
+
+	s.receivers.Wait()
+	s.connections = map[string]*net.TCPConn{}
+	s.listener = nil
 }
 
 func (s *TcpServer) isRunning() bool {
@@ -86,9 +90,7 @@ func (s *TcpServer) accept() {
 		s.connections[conn.RemoteAddr().String()] = conn
 		s.mutex.Unlock()
 		s.CbConnected(conn.RemoteAddr())
-		if s.Verbose {
-			log.Printf("%v - Start receiving: %s -> %s", s.Name, conn.RemoteAddr(), conn.LocalAddr())
-		}
+		log.Printf("%v - Start receiving: %s -> %s", s.Name, conn.RemoteAddr(), conn.LocalAddr())
 		go s.receive(conn)
 	}
 
@@ -96,6 +98,9 @@ func (s *TcpServer) accept() {
 }
 
 func (s *TcpServer) receive(conn *net.TCPConn) {
+	s.receivers.Add(1)
+	defer s.receivers.Done()
+
 	firstData := true
 	data := make([]byte, maxDatagramSize)
 	for {
@@ -104,7 +109,7 @@ func (s *TcpServer) receive(conn *net.TCPConn) {
 			log.Printf("%v - Could not receive data: %v -> %s: %s", s.Name, conn.RemoteAddr(), conn.LocalAddr(), err)
 			break
 		}
-		if s.Verbose && firstData {
+		if firstData {
 			firstData = false
 			log.Printf("%v - Received data: %v -> %v", s.Name, conn.RemoteAddr(), conn.LocalAddr())
 		}
@@ -115,18 +120,18 @@ func (s *TcpServer) receive(conn *net.TCPConn) {
 	delete(s.connections, conn.RemoteAddr().String())
 	s.mutex.Unlock()
 	s.CbDisconnected(conn.RemoteAddr())
-	if s.Verbose {
-		log.Printf("%v - Stop receiving: %v -> %v", s.Name, conn.RemoteAddr(), conn.LocalAddr())
-	}
+	log.Printf("%v - Stop receiving: %v -> %v", s.Name, conn.RemoteAddr(), conn.LocalAddr())
 }
 
 func (s *TcpServer) Respond(data []byte, addr net.Addr) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if conn, ok := s.connections[addr.String()]; ok {
-		if _, err := conn.Write(data); err != nil {
-			log.Printf("%v - Could not respond: %v -> %v: %s", s.Name, s.listener.Addr(), addr, err)
+	if s.running {
+		if conn, ok := s.connections[addr.String()]; ok {
+			if _, err := conn.Write(data); err != nil {
+				log.Printf("%v - Could not respond: %v -> %v: %s", s.Name, s.listener.Addr(), addr, err)
+			}
 		}
 	}
 }

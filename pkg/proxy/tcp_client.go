@@ -16,6 +16,7 @@ type TcpClient struct {
 	conn           *net.TCPConn
 	running        bool
 	mutex          sync.Mutex
+	receivers      sync.WaitGroup
 }
 
 func NewTcpClient(address string) (c *TcpClient) {
@@ -54,9 +55,7 @@ func (c *TcpClient) Start() {
 	}
 
 	c.CbConnected()
-	if c.Verbose {
-		log.Printf("%v - Start Receiving: %v -> %v", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr())
-	}
+	log.Printf("%v - Start Receiving: %v -> %v", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr())
 	go c.receive()
 }
 
@@ -72,6 +71,7 @@ func (c *TcpClient) Stop() {
 	if err := c.conn.Close(); err != nil {
 		log.Printf("%v - Could not close client connection: %v", c.Name, err)
 	}
+	c.receivers.Wait()
 }
 
 func (c *TcpClient) isRunning() bool {
@@ -81,6 +81,10 @@ func (c *TcpClient) isRunning() bool {
 }
 
 func (c *TcpClient) receive() {
+
+	c.receivers.Add(1)
+	defer c.receivers.Done()
+
 	firstData := true
 	data := make([]byte, maxDatagramSize)
 	for c.isRunning() {
@@ -97,15 +101,15 @@ func (c *TcpClient) receive() {
 	}
 
 	c.CbDisconnected()
-	if c.Verbose {
-		log.Printf("%v - Stop receiving: %v -> %v", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr())
-	}
+	log.Printf("%v - Stop receiving: %v -> %v", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr())
 }
 
 func (c *TcpClient) Send(data []byte) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	if _, err := c.conn.Write(data); err != nil {
-		log.Printf("%v - Could not send: %v -> %v: %s", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr(), err)
+	if c.running {
+		if _, err := c.conn.Write(data); err != nil {
+			log.Printf("%v - Could not send: %v -> %v: %s", c.Name, c.conn.LocalAddr(), c.conn.RemoteAddr(), err)
+		}
 	}
 }
