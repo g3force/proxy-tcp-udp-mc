@@ -14,12 +14,14 @@ func TestUdpProxy_roundtrip(t *testing.T) {
 
 	t.Run("Roundtrip", func(t *testing.T) {
 		proxy := NewUdpProxy(":15000", "localhost:15001")
+		proxy.SetName("UdpTestProxy")
 		proxy.Start()
 
 		server := NewUdpServer(":15001")
 		server.Consumer = func(data []byte, addr *net.UDPAddr) {
 			server.Respond([]byte(res), addr)
 		}
+		server.Name = "UdpTestServer"
 		server.Start()
 
 		cRecv := make(chan bool)
@@ -31,6 +33,7 @@ func TestUdpProxy_roundtrip(t *testing.T) {
 			}
 			cRecv <- true
 		}
+		client.Name = "UdpTestClient"
 		client.Start()
 
 		client.Send([]byte(req))
@@ -42,8 +45,8 @@ func TestUdpProxy_roundtrip(t *testing.T) {
 		}
 
 		client.Stop()
-		server.Stop()
 		proxy.Stop()
+		server.Stop()
 	})
 }
 
@@ -53,6 +56,7 @@ func TestUdpProxy_multi_client(t *testing.T) {
 
 	t.Run("Roundtrip", func(t *testing.T) {
 		proxy := NewUdpProxy(":15100", "localhost:15101")
+		proxy.SetName("UdpTestProxy")
 		proxy.Start()
 
 		server := NewUdpServer(":15101")
@@ -60,6 +64,7 @@ func TestUdpProxy_multi_client(t *testing.T) {
 			// Echo data
 			server.Respond(data, addr)
 		}
+		server.Name = "UdpTestServer"
 		server.Start()
 
 		cRecv := make(chan bool, nClients)
@@ -71,11 +76,11 @@ func TestUdpProxy_multi_client(t *testing.T) {
 				actualRes := string(data)
 				expectedRes := strconv.Itoa(clientId)
 				if actualRes != expectedRes {
-					localAddr := client.conn.LocalAddr().String()
-					t.Errorf("Expected to receive %s at %v, but got %s", expectedRes, localAddr, actualRes)
+					t.Errorf("Expected to receive %s, but got %s", expectedRes, actualRes)
 				}
 				cRecv <- true
 			}
+			client.Name = "UdpTestClient_" + strconv.Itoa(i)
 			client.Start()
 			clients = append(clients, client)
 		}
@@ -96,7 +101,7 @@ func TestUdpProxy_multi_client(t *testing.T) {
 			client.Stop()
 		}
 
-		server.Stop()
 		proxy.Stop()
+		server.Stop()
 	})
 }

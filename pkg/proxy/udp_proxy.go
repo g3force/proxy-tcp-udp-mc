@@ -76,7 +76,7 @@ func (p *UdpProxy) newDataFromSource(data []byte, sourceAddr *net.UDPAddr) {
 	if !ok {
 		client = &udpProxyClient{address: sourceAddr, parent: p}
 		client.client = NewUdpClient(p.targetAddress)
-		client.client.Name = p.name + "_Client"
+		client.client.Name = p.name + "_Client_" + sourceAddr.String()
 		client.client.Consumer = client.newData
 		p.clients[sourceAddr.String()] = client
 		client.Start()

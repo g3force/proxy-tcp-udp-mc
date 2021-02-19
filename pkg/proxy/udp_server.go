@@ -8,12 +8,13 @@ import (
 
 // UdpServer listens for UDP packets and allow to send responses
 type UdpServer struct {
-	Name     string
-	Consumer func([]byte, *net.UDPAddr)
-	address  string
-	conn     *net.UDPConn
-	running  bool
-	mutex    sync.Mutex
+	Name      string
+	Consumer  func([]byte, *net.UDPAddr)
+	address   string
+	conn      *net.UDPConn
+	running   bool
+	mutex     sync.Mutex
+	receivers sync.WaitGroup
 }
 
 // NewUdpServer creates a new UDP server
@@ -27,6 +28,11 @@ func NewUdpServer(address string) (t *UdpServer) {
 
 // Start the server, listening for new data
 func (s *UdpServer) Start() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.running {
+		return
+	}
 	s.running = true
 
 	addr, err := net.ResolveUDPAddr("udp", s.address)
@@ -52,9 +58,13 @@ func (s *UdpServer) Start() {
 func (s *UdpServer) Stop() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	s.running = false
-	if err := s.conn.Close(); err != nil {
-		log.Printf("%v - Could not close client connection: %v", s.Name, err)
+	if s.running {
+		s.running = false
+		if err := s.conn.Close(); err != nil {
+			log.Printf("%v - Could not close client connection: %v", s.Name, err)
+		}
+		s.receivers.Wait()
+		s.conn = nil
 	}
 }
 
@@ -62,29 +72,29 @@ func (s *UdpServer) Stop() {
 func (s *UdpServer) Respond(data []byte, addr *net.UDPAddr) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	if _, err := s.conn.WriteToUDP(data, addr); err != nil {
-		log.Printf("%v - Could not respond to %s: %s", s.Name, s.address, err)
+	if s.running {
+		if _, err := s.conn.WriteToUDP(data, addr); err != nil {
+			log.Printf("%v - Could not respond to %s: %s", s.Name, s.address, err)
+		}
 	}
-}
-
-func (s *UdpServer) isRunning() bool {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	return s.running
 }
 
 func (s *UdpServer) receive() {
 	log.Printf("%v - Listening on %s", s.Name, s.address)
+	defer log.Printf("%v - Stop listening on %s", s.Name, s.address)
+
+	s.receivers.Add(1)
+	defer s.receivers.Done()
 
 	data := make([]byte, maxDatagramSize)
 	for {
 		n, clientAddr, err := s.conn.ReadFromUDP(data)
 		if err != nil {
-			log.Printf("%v - Could not receive data from %s: %s", s.Name, s.address, err)
-			break
+			if opErr, ok := err.(*net.OpError); !ok || opErr.Err.Error() != "use of closed network connection" {
+				log.Printf("%v - Could not receive data from %s: %s", s.Name, s.address, err)
+			}
+			return
 		}
 		s.Consumer(data[:n], clientAddr)
 	}
-
-	log.Printf("%v - Stop listening on %s", s.Name, s.address)
 }
