@@ -76,6 +76,11 @@ func (c *UdpClient) connect() {
 	}
 
 	iaddrs, err := net.InterfaceAddrs()
+	if err != nil {
+		log.Printf("%v - Could not retrieve interface addresses: %v", c.Name, err)
+		return
+	}
+
 	for _, iaddr := range iaddrs {
 		ip := iaddr.(*net.IPNet).IP
 		if ip.To4() == nil {
