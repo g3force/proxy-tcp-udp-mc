@@ -16,7 +16,7 @@ type TcpServer struct {
 	connections    map[string]*net.TCPConn
 	running        bool
 	mutex          sync.Mutex
-	receivers      sync.WaitGroup
+	handlers       sync.WaitGroup
 }
 
 func NewTcpServer(address string) (t *TcpServer) {
@@ -67,7 +67,7 @@ func (s *TcpServer) Stop() {
 		log.Printf("%v - Could not close client connection: %v", s.Name, err)
 	}
 
-	s.receivers.Wait()
+	s.handlers.Wait()
 	s.connections = map[string]*net.TCPConn{}
 	s.listener = nil
 }
@@ -80,6 +80,10 @@ func (s *TcpServer) isRunning() bool {
 
 func (s *TcpServer) accept() {
 	log.Printf("%v - Listening on %s", s.Name, s.listener.Addr())
+
+	s.handlers.Add(1)
+	defer s.handlers.Done()
+
 	for {
 		conn, err := s.listener.AcceptTCP()
 		if err != nil {
@@ -98,8 +102,8 @@ func (s *TcpServer) accept() {
 }
 
 func (s *TcpServer) receive(conn *net.TCPConn) {
-	s.receivers.Add(1)
-	defer s.receivers.Done()
+	s.handlers.Add(1)
+	defer s.handlers.Done()
 
 	firstData := true
 	data := make([]byte, maxDatagramSize)
