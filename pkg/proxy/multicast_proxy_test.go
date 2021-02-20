@@ -14,7 +14,7 @@ func TestMulticastProxy_roundtrip(t *testing.T) {
 	targetAddress := "224.100.0.1:15001"
 
 	t.Run("Roundtrip", func(t *testing.T) {
-		cRecv := make(chan bool, 100)
+		cRecv := make(chan bool)
 
 		receivedPackets := 0
 		server := NewMulticastServer(targetAddress)
@@ -25,7 +25,7 @@ func TestMulticastProxy_roundtrip(t *testing.T) {
 			}
 			receivedPackets++
 			log.Printf("Got %vth packet from %v", receivedPackets, ifi.Name)
-			cRecv <- true
+			close(cRecv)
 		}
 		server.name = "McTestServer"
 		server.Start()
@@ -40,10 +40,20 @@ func TestMulticastProxy_roundtrip(t *testing.T) {
 
 		client.Send([]byte(req))
 
-		select {
-		case <-cRecv:
-		case <-time.After(1 * time.Second):
-			t.Error("Timed out")
+		sending := true
+		messagesSent := 0
+		for sending {
+			select {
+			case <-cRecv:
+				sending = false
+			case <-time.After(20 * time.Millisecond):
+				client.Send([]byte(req))
+				messagesSent++
+				if messagesSent >= 50 {
+					t.Error("Timed out")
+					sending = false
+				}
+			}
 		}
 
 		client.Stop()
