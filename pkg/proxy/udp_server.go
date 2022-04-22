@@ -15,6 +15,7 @@ type UdpServer struct {
 	running   bool
 	mutex     sync.Mutex
 	receivers sync.WaitGroup
+	Verbose   bool
 }
 
 // NewUdpServer creates a new UDP server
@@ -73,6 +74,9 @@ func (s *UdpServer) Respond(data []byte, addr *net.UDPAddr) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if s.running {
+		if s.Verbose {
+			log.Printf("%v - Send %d bytes to %s at %s", s.Name, len(data), addr, s.address)
+		}
 		if _, err := s.conn.WriteToUDP(data, addr); err != nil {
 			log.Printf("%v - Could not respond to %s: %s", s.Name, s.address, err)
 		}
@@ -94,6 +98,9 @@ func (s *UdpServer) receive() {
 				log.Printf("%v - Could not receive data from %s: %s", s.Name, s.address, err)
 			}
 			return
+		}
+		if s.Verbose {
+			log.Printf("%v - Got %d bytes from %s at %s", s.Name, n, clientAddr, s.address)
 		}
 		s.Consumer(data[:n], clientAddr)
 	}

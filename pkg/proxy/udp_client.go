@@ -15,6 +15,7 @@ type UdpClient struct {
 	running   bool
 	mutex     sync.Mutex
 	receivers sync.WaitGroup
+	Verbose   bool
 }
 
 // NewUdpClient creates a new UDP client
@@ -61,6 +62,9 @@ func (c *UdpClient) Send(data []byte) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for _, conn := range c.conns {
+		if c.Verbose {
+			log.Printf("%v - Send %d bytes to %s at %s", c.Name, len(data), conn.RemoteAddr().String(), conn.LocalAddr().String())
+		}
 		if _, err := conn.Write(data); err != nil {
 			log.Printf("%v - Could not write to %s at %s: %s", c.Name, conn.RemoteAddr(), conn.LocalAddr(), err)
 		}
@@ -117,8 +121,14 @@ func (c *UdpClient) receive(conn *net.UDPConn) {
 			if opErr, ok := err.(*net.OpError); !ok || opErr.Err.Error() != "use of closed network connection" {
 				log.Printf("%v - Could not receive data from %s at %s: %s", c.Name, conn.RemoteAddr(), conn.LocalAddr(), err)
 			}
+			if c.Verbose {
+				log.Printf("%v - Connection closed from %s at %s", c.Name, conn.RemoteAddr(), conn.LocalAddr())
+			}
 			return
 		} else {
+			if c.Verbose {
+				log.Printf("%v - Got %d bytes from %s at %s", c.Name, n, conn.RemoteAddr(), conn.LocalAddr())
+			}
 			c.Consumer(data[:n])
 		}
 	}

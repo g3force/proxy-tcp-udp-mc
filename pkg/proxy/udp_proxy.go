@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"log"
 	"net"
 )
 
@@ -8,9 +9,13 @@ type udpProxyClient struct {
 	address *net.UDPAddr
 	client  *UdpClient
 	parent  *UdpProxy
+	Verbose bool
 }
 
 func (c *udpProxyClient) newData(data []byte) {
+	if c.Verbose {
+		log.Printf("Got %d bytes for %s", len(data), c.address)
+	}
 	c.parent.server.Respond(data, c.address)
 }
 func (c *udpProxyClient) send(data []byte) {
@@ -32,6 +37,7 @@ type UdpProxy struct {
 	targetAddress string
 	server        *UdpServer
 	clients       map[string]*udpProxyClient
+	Verbose       bool
 	Proxy
 }
 
@@ -53,8 +59,9 @@ func (p *UdpProxy) SetName(name string) {
 	p.server.Name = name + "_Server"
 }
 
-func (p *UdpProxy) SetVerbose(_ bool) {
-	// empty
+func (p *UdpProxy) SetVerbose(verbose bool) {
+	p.Verbose = verbose
+	p.server.Verbose = verbose
 }
 
 // Start the proxy
@@ -72,12 +79,17 @@ func (p *UdpProxy) Stop() {
 }
 
 func (p *UdpProxy) newDataFromSource(data []byte, sourceAddr *net.UDPAddr) {
+	if p.Verbose {
+		log.Printf("Got %d bytes from %s", len(data), sourceAddr.String())
+	}
 	client, ok := p.clients[sourceAddr.String()]
 	if !ok {
 		client = &udpProxyClient{address: sourceAddr, parent: p}
+		client.Verbose = p.Verbose
 		client.client = NewUdpClient(p.targetAddress)
 		client.client.Name = p.name + "_Client_" + sourceAddr.String()
 		client.client.Consumer = client.newData
+		client.client.Verbose = p.Verbose
 		p.clients[sourceAddr.String()] = client
 		client.Start()
 	}
