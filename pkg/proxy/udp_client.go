@@ -86,6 +86,9 @@ func (c *UdpClient) connect() {
 	}
 
 	for _, iaddr := range iaddrs {
+		if !addr.IP.IsMulticast() && !iaddr.(*net.IPNet).Contains(addr.IP) {
+			continue
+		}
 		ip := iaddr.(*net.IPNet).IP
 		if ip.To4() == nil {
 			// Ignore IPv6 for now
