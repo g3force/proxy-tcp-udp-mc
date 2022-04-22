@@ -75,6 +75,6 @@ workflows:
           context: docker hub
           filters:
             branches:
-              only: master
+              only: main
             tags:
               only: /^v.*/
