@@ -2,56 +2,79 @@ version: 2
 jobs:
   app:
     docker:
-    - image: circleci/golang:1.14
-
-    working_directory: /go/src/github.com/g3force/proxy-tcp-udp-mc
+      - image: cimg/go:1.18
     steps:
-    - checkout
-    - run: go get -v -t -d ./...
-    - run: go test -v ./...
-    - run:
-        working_directory: cmd/proxy-tcp-udp-mc
-        command: |
-          GOOS=linux GOARCH=amd64 go build -o ../../release/proxy-tcp-udp-mc_linux_amd64
-          GOOS=darwin GOARCH=amd64 go build -o ../../release/proxy-tcp-udp-mc_darwin_amd64
-          GOOS=windows GOARCH=amd64 go build -o ../../release/proxy-tcp-udp-mc_windows_amd64.exe
-    - persist_to_workspace:
-        root: .
-        paths:
-        - release/*
+      - checkout
+      - run: go get -v -t -d ./...
+      - run: go test -v -covermode=count -coverprofile=count.out ./...
+      - run: go tool cover -html=count.out -o coverage.html
+      - run:
+          working_directory: cmd/proxy-tcp-udp-mc
+          command: |
+            GOOS=linux GOARCH=amd64 go build -o ../../release/proxy-tcp-udp-mc_linux_amd64
+            GOOS=darwin GOARCH=amd64 go build -o ../../release/proxy-tcp-udp-mc_darwin_amd64
+            GOOS=windows GOARCH=amd64 go build -o ../../release/proxy-tcp-udp-mc_windows_amd64.exe
+      - persist_to_workspace:
+          root: .
+          paths:
+            - release/*
+      - store_artifacts:
+          path: coverage.html
+          destination: coverage
 
   publish-github-release:
     docker:
-    - image: circleci/golang:1.14
+      - image: cimg/go:1.18
     steps:
-    - attach_workspace:
-        at: .
-    - run:
-        name: "Prepare artifacts"
-        working_directory: release
-        command: |
-          mv proxy-tcp-udp-mc_linux_amd64 proxy-tcp-udp-mc_${CIRCLE_TAG}_linux_amd64
-          mv proxy-tcp-udp-mc_darwin_amd64 proxy-tcp-udp-mc_${CIRCLE_TAG}_darwin_amd64
-          mv proxy-tcp-udp-mc_windows_amd64.exe proxy-tcp-udp-mc_${CIRCLE_TAG}_windows_amd64.exe
-    - run:
-        name: "Publish Release on GitHub"
-        command: |
-          go get github.com/tcnksm/ghr
-          ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} ./release/
+      - attach_workspace:
+          at: .
+      - run:
+          name: "Prepare artifacts"
+          working_directory: release
+          command: |
+            mv proxy-tcp-udp-mc_linux_amd64 proxy-tcp-udp-mc_${CIRCLE_TAG}_linux_amd64
+            mv proxy-tcp-udp-mc_darwin_amd64 proxy-tcp-udp-mc_${CIRCLE_TAG}_darwin_amd64
+            mv proxy-tcp-udp-mc_windows_amd64.exe proxy-tcp-udp-mc_${CIRCLE_TAG}_windows_amd64.exe
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            go install github.com/tcnksm/ghr@v0.14.0
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${CIRCLE_TAG} ./release/
+
+  docker:
+    docker:
+      - image: cimg/base:2022.04
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 20.10.11
+      - run: |
+          TAG=${CIRCLE_TAG:1}
+          TAG=${TAG:-latest}
+          docker build -t g3force/proxy-tcp-udp-mc:$TAG .
+          docker login -u "${DOCKER_HUB_USERNAME}" -p "${DOCKER_HUB_PASSWORD}"
+          docker push g3force/proxy-tcp-udp-mc:$TAG
 
 workflows:
   version: 2
   main:
     jobs:
-    - app:
-        filters:
-          tags:
-            only: /.*/
-    - publish-github-release:
-        requires:
-        - app
-        filters:
-          branches:
-            ignore: /.*/
-          tags:
-            only: /^v.*/
+      - app:
+          filters:
+            tags:
+              only: /.*/
+      - publish-github-release:
+          requires:
+            - app
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
+      - docker:
+          context: docker hub
+          filters:
+            branches:
+              only: master
+            tags:
+              only: /^v.*/
