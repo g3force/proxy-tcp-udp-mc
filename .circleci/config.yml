@@ -45,18 +45,6 @@ jobs:
           paths:
             - release/*
 
-  publish_gh:
-    resource_class: small
-    docker:
-      - image: cimg/go:1.23.5@sha256:d9d2cd7d194f229721b28b24c4ca5d8b6876b90e67ca6329943e202940288269
-    steps:
-      - attach_workspace:
-          at: .
-      - run: |
-          set -u
-          go install github.com/tcnksm/ghr@v0.16.0
-          ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete -generatenotes ${CIRCLE_TAG} ./release
-
   build_docker:
     resource_class: small
     docker:
@@ -102,10 +90,6 @@ workflows:
   release:
     jobs:
       - build_go:
-          filters: { branches: { ignore: /.*/ }, tags: { only: /^v.*/ } }
-      - publish_gh:
-          context: github
-          requires: [ build_go ]
           filters: { branches: { ignore: /.*/ }, tags: { only: /^v.*/ } }
   docker:
     jobs:
