@@ -17,6 +17,7 @@ type MulticastServer struct {
 	mutex            sync.Mutex
 	SkipInterfaces   []string
 	receivers        sync.WaitGroup
+	statsPrinter     *StatsPrinter
 }
 
 func NewMulticastServer(multicastAddress string) (r *MulticastServer) {
@@ -24,6 +25,7 @@ func NewMulticastServer(multicastAddress string) (r *MulticastServer) {
 	r.name = "MulticastServer"
 	r.multicastAddress = multicastAddress
 	r.Consumer = func([]byte, net.Interface) {}
+	r.statsPrinter = NewStatsPrinter()
 	return
 }
 
@@ -154,6 +156,7 @@ func (r *MulticastServer) receiveOnInterface(ifi net.Interface) {
 			log.Printf("%v - Got first data packets from %s (%s)", r.name, r.multicastAddress, ifi.Name)
 			first = false
 		}
+		r.statsPrinter.NewMessage(r.name + ":" + ifi.Name)
 		r.Consumer(data[:n], ifi)
 	}
 

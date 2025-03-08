@@ -38,6 +38,7 @@ type UdpProxy struct {
 	server        *UdpServer
 	clients       map[string]*udpProxyClient
 	Verbose       bool
+	statsPrinter  *StatsPrinter
 	Proxy
 }
 
@@ -51,6 +52,7 @@ func NewUdpProxy(sourceAddress, targetAddress string) (p *UdpProxy) {
 	p.server = NewUdpServer(sourceAddress)
 	p.server.Consumer = p.newDataFromSource
 	p.clients = map[string]*udpProxyClient{}
+	p.statsPrinter = NewStatsPrinter()
 	return
 }
 
@@ -82,6 +84,7 @@ func (p *UdpProxy) newDataFromSource(data []byte, sourceAddr *net.UDPAddr) {
 	if p.Verbose {
 		log.Printf("Got %d bytes from %s", len(data), sourceAddr.String())
 	}
+	p.statsPrinter.NewMessage(p.name + ":from_source")
 	client, ok := p.clients[sourceAddr.String()]
 	if !ok {
 		client = &udpProxyClient{address: sourceAddr, parent: p}

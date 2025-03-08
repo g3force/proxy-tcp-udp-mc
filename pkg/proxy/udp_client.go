@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"errors"
 	"log"
 	"net"
 	"sync"
@@ -8,14 +9,15 @@ import (
 
 // UdpClient establishes a UDP connection to a server
 type UdpClient struct {
-	Name      string
-	Consumer  func([]byte)
-	address   string
-	conns     []*net.UDPConn
-	running   bool
-	mutex     sync.Mutex
-	receivers sync.WaitGroup
-	Verbose   bool
+	Name         string
+	Consumer     func([]byte)
+	address      string
+	conns        []*net.UDPConn
+	running      bool
+	mutex        sync.Mutex
+	receivers    sync.WaitGroup
+	Verbose      bool
+	statsPrinter *StatsPrinter
 }
 
 // NewUdpClient creates a new UDP client
@@ -24,6 +26,7 @@ func NewUdpClient(address string) (t *UdpClient) {
 	t.Name = "UdpClient"
 	t.address = address
 	t.Consumer = func([]byte) {}
+	t.statsPrinter = NewStatsPrinter()
 	return
 }
 
@@ -61,6 +64,7 @@ func (c *UdpClient) Stop() {
 func (c *UdpClient) Send(data []byte) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+	c.statsPrinter.NewMessage(c.Name + ":send")
 	for _, conn := range c.conns {
 		if c.Verbose {
 			log.Printf("%v - Send %d bytes to %s at %s", c.Name, len(data), conn.RemoteAddr().String(), conn.LocalAddr().String())
@@ -121,7 +125,8 @@ func (c *UdpClient) receive(conn *net.UDPConn) {
 	for {
 		n, _, err := conn.ReadFrom(data)
 		if err != nil {
-			if opErr, ok := err.(*net.OpError); !ok || opErr.Err.Error() != "use of closed network connection" {
+			var opErr *net.OpError
+			if !errors.As(err, &opErr) || opErr.Err.Error() != "use of closed network connection" {
 				log.Printf("%v - Could not receive data from %s at %s: %s", c.Name, conn.RemoteAddr(), conn.LocalAddr(), err)
 			}
 			if c.Verbose {
@@ -132,6 +137,7 @@ func (c *UdpClient) receive(conn *net.UDPConn) {
 			if c.Verbose {
 				log.Printf("%v - Got %d bytes from %s at %s", c.Name, n, conn.RemoteAddr(), conn.LocalAddr())
 			}
+			c.statsPrinter.NewMessage(c.Name + ":receive")
 			c.Consumer(data[:n])
 		}
 	}

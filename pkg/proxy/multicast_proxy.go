@@ -8,6 +8,7 @@ type MulticastProxy struct {
 	targetAddress string
 	source        *MulticastServer
 	target        *UdpClient
+	statsPrinter  *StatsPrinter
 	Proxy
 }
 
@@ -19,10 +20,12 @@ func NewMulticastProxy(sourceAddress, targetAddress string) (p *MulticastProxy) 
 	p.source.Consumer = p.newDataFromSource
 	p.target = NewUdpClient(p.targetAddress)
 	p.target.Consumer = p.newDataFromTarget
+	p.statsPrinter = NewStatsPrinter()
 	return
 }
 
 func (p *MulticastProxy) SetName(name string) {
+	p.name = name
 	p.source.name = name + "_Source"
 	p.target.Name = name + "_Target"
 }
@@ -32,10 +35,11 @@ func (p *MulticastProxy) SetVerbose(verbose bool) {
 }
 
 func (p *MulticastProxy) newDataFromSource(data []byte, _ net.Interface) {
+	p.statsPrinter.NewMessage(p.name + ":from_source")
 	p.target.Send(data)
 }
 func (p *MulticastProxy) newDataFromTarget(_ []byte) {
-	// ignore
+	p.statsPrinter.NewMessage(p.name + ":from_target")
 }
 
 func (p *MulticastProxy) Start() {

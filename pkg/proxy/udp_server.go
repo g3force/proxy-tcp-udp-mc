@@ -8,14 +8,15 @@ import (
 
 // UdpServer listens for UDP packets and allow to send responses
 type UdpServer struct {
-	Name      string
-	Consumer  func([]byte, *net.UDPAddr)
-	address   string
-	conn      *net.UDPConn
-	running   bool
-	mutex     sync.Mutex
-	receivers sync.WaitGroup
-	Verbose   bool
+	Name         string
+	Consumer     func([]byte, *net.UDPAddr)
+	address      string
+	conn         *net.UDPConn
+	running      bool
+	mutex        sync.Mutex
+	receivers    sync.WaitGroup
+	Verbose      bool
+	statsPrinter *StatsPrinter
 }
 
 // NewUdpServer creates a new UDP server
@@ -24,6 +25,7 @@ func NewUdpServer(address string) (t *UdpServer) {
 	t.Name = "UdpServer"
 	t.address = address
 	t.Consumer = func([]byte, *net.UDPAddr) {}
+	t.statsPrinter = NewStatsPrinter()
 	return
 }
 
@@ -74,6 +76,7 @@ func (s *UdpServer) Respond(data []byte, addr *net.UDPAddr) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if s.running {
+		s.statsPrinter.NewMessage(s.Name + ":respond")
 		if s.Verbose {
 			log.Printf("%v - Send %d bytes to %s at %s", s.Name, len(data), addr, s.address)
 		}
@@ -102,6 +105,7 @@ func (s *UdpServer) receive() {
 		if s.Verbose {
 			log.Printf("%v - Got %d bytes from %s at %s", s.Name, n, clientAddr, s.address)
 		}
+		s.statsPrinter.NewMessage(s.Name + ":receive")
 		s.Consumer(data[:n], clientAddr)
 	}
 }
